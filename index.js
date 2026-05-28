@@ -34,7 +34,7 @@ async function updateDashboard() {
   } else {
     for (const [userId, data] of Object.entries(bots)) {
       const status = data.bot ? '🟢 Online' : '🔴 Offline'
-      desc += `**${data.name}** → ${data.ip}:${data.port} ${status}\n`
+      desc += `**${data.name}** → ${data.ip}:${data.port} ${status} | Registered by <@${userId}>\n`
     }
   }
 
