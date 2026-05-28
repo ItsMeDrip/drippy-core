@@ -12,10 +12,56 @@ const client = new Client({
 })
 
 const bots = {}
+const STAFF_CHANNEL_ID = '1509555568925212672'
+let dashboardMessageId = null
 
 client.on('ready', () => {
   console.log(`Drippy Core is online as ${client.user.tag}!`)
+  // Update dashboard every 30 seconds
+  setInterval(updateDashboard, 30000)
 })
+
+async function updateDashboard() {
+  const channel = client.channels.cache.get(STAFF_CHANNEL_ID)
+  if (!channel) return
+
+  const activeBots = Object.entries(bots).filter(([, data]) => data.bot)
+  const totalBots = Object.keys(bots).length
+
+  let desc = ''
+  if (totalBots === 0) {
+    desc = 'No bots registered yet!'
+  } else {
+    for (const [userId, data] of Object.entries(bots)) {
+      const status = data.bot ? '🟢 Online' : '🔴 Offline'
+      desc += `**${data.name}** → ${data.ip}:${data.port} ${status}\n`
+    }
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle('🤖 Drippy Core — Live Bot Dashboard')
+    .setDescription(desc)
+    .addFields(
+      { name: '📊 Total Registered', value: `${totalBots}`, inline: true },
+      { name: '🟢 Active Bots', value: `${activeBots.length}`, inline: true }
+    )
+    .setColor(0x9B59B6)
+    .setFooter({ text: 'Updates every 30 seconds' })
+    .setTimestamp()
+
+  try {
+    if (dashboardMessageId) {
+      const msg = await channel.messages.fetch(dashboardMessageId)
+      await msg.edit({ embeds: [embed] })
+    } else {
+      const msg = await channel.send({ embeds: [embed] })
+      dashboardMessageId = msg.id
+    }
+  } catch {
+    const msg = await channel.send({ embeds: [embed] })
+    dashboardMessageId = msg.id
+  }
+}
 
 client.on('messageCreate', async (message) => {
   if (message.content === '!panel') {
@@ -88,6 +134,7 @@ client.on('interactionCreate', async (interaction) => {
     const port = parseInt(interaction.fields.getTextInputValue('botPort'))
     bots[userId] = { name, ip, port, bot: null }
     interaction.reply({ content: `Registered! Name: ${name} | IP: ${ip} | Port: ${port}`, ephemeral: true })
+    updateDashboard()
   }
 })
 
@@ -103,6 +150,7 @@ function startBot(userId) {
   bots[userId].bot = bot
   bot.once('spawn', () => {
     console.log(`${name} is online!`)
+    updateDashboard()
     setTimeout(() => {
       bot.chat('/register pass123 pass123')
       setTimeout(() => {
@@ -116,9 +164,9 @@ function startBot(userId) {
       }, 2000)
     }, 3000)
   })
-  bot.on('kicked', () => { bots[userId].bot = null })
-  bot.on('error', () => { bots[userId].bot = null })
-  bot.on('end', () => { bots[userId].bot = null })
+  bot.on('kicked', () => { bots[userId].bot = null; updateDashboard() })
+  bot.on('error', () => { bots[userId].bot = null; updateDashboard() })
+  bot.on('end', () => { bots[userId].bot = null; updateDashboard() })
 }
 
 client.login(process.env.TOKEN)
