@@ -32,7 +32,8 @@ const client = new Client({
 })
 
 const bots = {}
-const STAFF_CHANNEL_ID = '1509839183441825925'
+const STATUS_CHANNEL_ID = '1509839183441825925'
+const ADMIN_CHANNEL_ID = '1509839337850671216'
 let dashboardMessageId = null
 
 async function loadBotsFromDB() {
@@ -54,7 +55,7 @@ client.on('ready', async () => {
 })
 
 async function updateDashboard() {
-  const channel = client.channels.cache.get(STAFF_CHANNEL_ID)
+  const channel = client.channels.cache.get(STATUS_CHANNEL_ID)
   if (!channel) return
   const activeBots = Object.entries(bots).filter(([, data]) => data.bot)
   const totalBots = Object.keys(bots).length
@@ -138,7 +139,7 @@ client.on('messageCreate', async (message) => {
     await message.channel.send({ embeds: [embed], components: [row1, row2] })
   }
 
-  if (message.content === '!staffpanel' && message.channel.id === STAFF_CHANNEL_ID) {
+  if (message.content === '!staffpanel' && message.channel.id === ADMIN_CHANNEL_ID) {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('staff_configure').setLabel('🔧 Configure').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('staff_start').setLabel('▶️ Force Start').setStyle(ButtonStyle.Success),
