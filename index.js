@@ -33,6 +33,8 @@ async function loadBotsFromDB() {
   const saved = await BotModel.find()
   for (const b of saved) {
     bots[b.userId] = { name: b.name, ip: b.ip, port: b.port, bot: null }
+    setTimeout(() => startBot(b.userId), 3000)
+    console.log(`Auto-starting bot for ${b.name}!`)
   }
   console.log(`Loaded ${saved.length} bots from database!`)
 }
@@ -85,8 +87,6 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return
 
   if (message.content === '!panel') {
-    const activeBots = Object.values(bots).filter(b => b.bot).length
-    const totalBots = Object.keys(bots).length
     const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('register').setLabel('Register').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('start').setLabel('Start Bot').setStyle(ButtonStyle.Success),
@@ -121,11 +121,6 @@ client.on('messageCreate', async (message) => {
         '⚠️ Port changes every restart, update if bot cant connect!\n' +
         '─────────────────────────\n' +
         '🔥 Powered by Drippy Core | DrippyBlox'
-      )
-      .addFields(
-        { name: '🖥️ System Status', value: '🟢 Online', inline: true },
-        { name: '🤖 Active Bots', value: `${activeBots}`, inline: true },
-        { name: '🎰 Total Registered', value: `${totalBots}`, inline: true }
       )
       .setColor(0x9B59B6)
       .setFooter({ text: 'Drippy Core | DrippyBlox' })
