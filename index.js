@@ -32,7 +32,7 @@ const client = new Client({
 })
 
 const bots = {}
-const STAFF_CHANNEL_ID = '1509555568925212672'
+const STAFF_CHANNEL_ID = '1509839183441825925'
 let dashboardMessageId = null
 
 async function loadBotsFromDB() {
