@@ -1,11 +1,26 @@
 const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder } = require('discord.js')
 const mineflayer = require('mineflayer')
+const mongoose = require('mongoose')
 const http = require('http')
 
 http.createServer((req, res) => {
   res.write('Drippy Core is alive! 🔥')
   res.end()
 }).listen(3000)
+
+// MongoDB Schema
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB! 🔥'))
+  .catch(err => console.log('MongoDB error:', err))
+
+const botSchema = new mongoose.Schema({
+  userId: String,
+  name: String,
+  ip: String,
+  port: Number
+})
+
+const BotModel = mongoose.model('Bot', botSchema)
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
@@ -15,9 +30,17 @@ const bots = {}
 const STAFF_CHANNEL_ID = '1509555568925212672'
 let dashboardMessageId = null
 
-client.on('ready', () => {
+async function loadBotsFromDB() {
+  const saved = await BotModel.find()
+  for (const b of saved) {
+    bots[b.userId] = { name: b.name, ip: b.ip, port: b.port, bot: null }
+  }
+  console.log(`Loaded ${saved.length} bots from database!`)
+}
+
+client.on('ready', async () => {
   console.log(`Drippy Core is online as ${client.user.tag}!`)
-  // Update dashboard every 30 seconds
+  await loadBotsFromDB()
   setInterval(updateDashboard, 30000)
 })
 
@@ -123,7 +146,9 @@ client.on('interactionCreate', async (interaction) => {
       if (!bots[userId]) return interaction.reply({ content: 'You are not registered!', ephemeral: true })
       if (bots[userId].bot) bots[userId].bot.quit()
       delete bots[userId]
+      await BotModel.deleteOne({ userId })
       interaction.reply({ content: 'Bot deleted! You can register again.', ephemeral: true })
+      updateDashboard()
     }
   }
 
@@ -133,6 +158,7 @@ client.on('interactionCreate', async (interaction) => {
     const ip = interaction.fields.getTextInputValue('botIp')
     const port = parseInt(interaction.fields.getTextInputValue('botPort'))
     bots[userId] = { name, ip, port, bot: null }
+    await BotModel.findOneAndUpdate({ userId }, { userId, name, ip, port }, { upsert: true })
     interaction.reply({ content: `Registered! Name: ${name} | IP: ${ip} | Port: ${port}`, ephemeral: true })
     updateDashboard()
   }
