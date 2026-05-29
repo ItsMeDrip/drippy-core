@@ -89,13 +89,54 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return
 
   if (message.content === '!panel') {
-    const row = new ActionRowBuilder().addComponents(
+    const activeBots = Object.values(bots).filter(b => b.bot).length
+    const totalBots = Object.keys(bots).length
+
+    const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('register').setLabel('Register').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('start').setLabel('Start Bot').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('stop').setLabel('Stop Bot').setStyle(ButtonStyle.Danger)
+    )
+    const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('status').setLabel('Status').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('stop').setLabel('Stop Bot').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId('delete').setLabel('Delete').setStyle(ButtonStyle.Danger)
     )
+    const embed = new EmbedBuilder()
+      .setTitle('Drippy Core Control Panel 🔥')
+      .setDescription(
+        '**Keeps your Aternos server alive 24/7!**\n\n' +
+        '**⚙️ Required Plugins:**\n' +
+        '• ViaVersion & ViaBackwards — version support\n' +
+        '• ViaRewind *(optional)* — for 1.7/1.8\n' +
+        '• AuthMe *(if login system)*\n' +
+        '• Disable AntiAFK if you have it!\n\n' +
+        '**🛡️ In Game Setup:**\n' +
+        'Pack bot in Obsidian + Torches then run:\n' +
+        '`/effect give <botname> minecraft:regeneration infinite 255`\n' +
+        '`/effect give <botname> minecraft:fire_resistance infinite 255`\n' +
+        '`/effect give <botname> minecraft:saturation infinite 255`\n' +
+        '`/effect give <botname> minecraft:poison infinite 1`\n\n' +
+        '**📖 How To Use:**\n' +
+        '• Click Register → enter name, IP, port\n' +
+        '• Start Aternos at aternos.org first!\n' +
+        '• Click Start Bot → bot joins!\n' +
+        '• Status → check online/offline\n' +
+        '• Stop Bot → disconnect\n' +
+        '• Delete → start fresh\n\n' +
+        '⚠️ Port changes every restart, update if bot cant connect!\n' +
+        '─────────────────────────\n' +
+        '🔥 Powered by Drippy Core | DrippyBlox'
+      )
+      .addFields(
+        { name: '🖥️ System Status', value: '🟢 Online', inline: true },
+        { name: '🤖 Active Bots', value: `${activeBots}`, inline: true },
+        { name: '🎰 Total Registered', value: `${totalBots}`, inline: true }
+      )
+      .setColor(0x9B59B6)
+      .setFooter({ text: 'Drippy Core | DrippyBlox' })
+      .setTimestamp()
+    await message.channel.send({ embeds: [embed], components: [row1, row2] })
+  }
     const embed = new EmbedBuilder()
       .setTitle('Drippy Core Control Panel 🔥')
       .setDescription('Use the buttons below to manage your Minecraft bot!')
