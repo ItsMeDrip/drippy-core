@@ -8,7 +8,6 @@ http.createServer((req, res) => {
   res.end()
 }).listen(3000)
 
-// MongoDB Schema
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB! 🔥'))
   .catch(err => console.log('MongoDB error:', err))
@@ -87,6 +86,8 @@ async function updateDashboard() {
 }
 
 client.on('messageCreate', async (message) => {
+  if (message.author.bot) return
+
   if (message.content === '!panel') {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('register').setLabel('Register').setStyle(ButtonStyle.Primary),
@@ -101,12 +102,27 @@ client.on('messageCreate', async (message) => {
       .setColor(0x9B59B6)
     await message.channel.send({ embeds: [embed], components: [row] })
   }
+
+  if (message.content === '!staffpanel' && message.channel.id === STAFF_CHANNEL_ID) {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('staff_configure').setLabel('🔧 Configure').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('staff_start').setLabel('▶️ Force Start').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('staff_stop').setLabel('⏹️ Force Stop').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('staff_delete').setLabel('🗑️ Force Delete').setStyle(ButtonStyle.Danger)
+    )
+    const embed = new EmbedBuilder()
+      .setTitle('👮 Drippy Core — Staff Panel')
+      .setDescription('Manage any registered bot from here!')
+      .setColor(0xFF0000)
+    await message.channel.send({ embeds: [embed], components: [row] })
+  }
 })
 
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton()) {
     const userId = interaction.user.id
 
+    // User buttons
     if (interaction.customId === 'register') {
       const modal = new ModalBuilder()
         .setCustomId('registerModal')
@@ -150,17 +166,108 @@ client.on('interactionCreate', async (interaction) => {
       interaction.reply({ content: 'Bot deleted! You can register again.', ephemeral: true })
       updateDashboard()
     }
+
+    // Staff buttons
+    if (interaction.customId === 'staff_configure') {
+      const modal = new ModalBuilder()
+        .setCustomId('staffConfigureModal')
+        .setTitle('Configure Bot')
+      const userIdInput = new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to configure').setStyle(TextInputStyle.Short).setRequired(true)
+      const nameInput = new TextInputBuilder().setCustomId('botName').setLabel('New Bot Username').setStyle(TextInputStyle.Short).setRequired(true)
+      const ipInput = new TextInputBuilder().setCustomId('botIp').setLabel('New Server IP').setStyle(TextInputStyle.Short).setRequired(true)
+      const portInput = new TextInputBuilder().setCustomId('botPort').setLabel('New Server Port').setStyle(TextInputStyle.Short).setRequired(true)
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(userIdInput),
+        new ActionRowBuilder().addComponents(nameInput),
+        new ActionRowBuilder().addComponents(ipInput),
+        new ActionRowBuilder().addComponents(portInput)
+      )
+      await interaction.showModal(modal)
+    }
+
+    if (interaction.customId === 'staff_start') {
+      const modal = new ModalBuilder()
+        .setCustomId('staffStartModal')
+        .setTitle('Force Start Bot')
+      const userIdInput = new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to start bot for').setStyle(TextInputStyle.Short).setRequired(true)
+      modal.addComponents(new ActionRowBuilder().addComponents(userIdInput))
+      await interaction.showModal(modal)
+    }
+
+    if (interaction.customId === 'staff_stop') {
+      const modal = new ModalBuilder()
+        .setCustomId('staffStopModal')
+        .setTitle('Force Stop Bot')
+      const userIdInput = new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to stop bot for').setStyle(TextInputStyle.Short).setRequired(true)
+      modal.addComponents(new ActionRowBuilder().addComponents(userIdInput))
+      await interaction.showModal(modal)
+    }
+
+    if (interaction.customId === 'staff_delete') {
+      const modal = new ModalBuilder()
+        .setCustomId('staffDeleteModal')
+        .setTitle('Force Delete Bot')
+      const userIdInput = new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to delete bot for').setStyle(TextInputStyle.Short).setRequired(true)
+      modal.addComponents(new ActionRowBuilder().addComponents(userIdInput))
+      await interaction.showModal(modal)
+    }
   }
 
-  if (interaction.isModalSubmit() && interaction.customId === 'registerModal') {
-    const userId = interaction.user.id
-    const name = interaction.fields.getTextInputValue('botName')
-    const ip = interaction.fields.getTextInputValue('botIp')
-    const port = parseInt(interaction.fields.getTextInputValue('botPort'))
-    bots[userId] = { name, ip, port, bot: null }
-    await BotModel.findOneAndUpdate({ userId }, { userId, name, ip, port }, { upsert: true })
-    interaction.reply({ content: `Registered! Name: ${name} | IP: ${ip} | Port: ${port}`, ephemeral: true })
-    updateDashboard()
+  if (interaction.isModalSubmit()) {
+    // User register
+    if (interaction.customId === 'registerModal') {
+      const userId = interaction.user.id
+      const name = interaction.fields.getTextInputValue('botName')
+      const ip = interaction.fields.getTextInputValue('botIp')
+      const port = parseInt(interaction.fields.getTextInputValue('botPort'))
+      bots[userId] = { name, ip, port, bot: null }
+      await BotModel.findOneAndUpdate({ userId }, { userId, name, ip, port }, { upsert: true })
+      interaction.reply({ content: `Registered! Name: ${name} | IP: ${ip} | Port: ${port}`, ephemeral: true })
+      updateDashboard()
+    }
+
+    // Staff configure
+    if (interaction.customId === 'staffConfigureModal') {
+      const targetId = interaction.fields.getTextInputValue('targetUserId')
+      const name = interaction.fields.getTextInputValue('botName')
+      const ip = interaction.fields.getTextInputValue('botIp')
+      const port = parseInt(interaction.fields.getTextInputValue('botPort'))
+      if (bots[targetId] && bots[targetId].bot) { bots[targetId].bot.quit(); bots[targetId].bot = null }
+      bots[targetId] = { name, ip, port, bot: null }
+      await BotModel.findOneAndUpdate({ userId: targetId }, { userId: targetId, name, ip, port }, { upsert: true })
+      interaction.reply({ content: `✅ Configured bot for <@${targetId}>! Name: ${name} | IP: ${ip} | Port: ${port}`, ephemeral: true })
+      updateDashboard()
+    }
+
+    // Staff start
+    if (interaction.customId === 'staffStartModal') {
+      const targetId = interaction.fields.getTextInputValue('targetUserId')
+      if (!bots[targetId]) return interaction.reply({ content: '❌ No bot registered for that user!', ephemeral: true })
+      if (bots[targetId].bot) return interaction.reply({ content: '❌ Bot is already running!', ephemeral: true })
+      startBot(targetId)
+      interaction.reply({ content: `✅ Force started bot for <@${targetId}>!`, ephemeral: true })
+    }
+
+    // Staff stop
+    if (interaction.customId === 'staffStopModal') {
+      const targetId = interaction.fields.getTextInputValue('targetUserId')
+      if (!bots[targetId] || !bots[targetId].bot) return interaction.reply({ content: '❌ Bot is not running!', ephemeral: true })
+      bots[targetId].bot.quit()
+      bots[targetId].bot = null
+      interaction.reply({ content: `✅ Force stopped bot for <@${targetId}>!`, ephemeral: true })
+      updateDashboard()
+    }
+
+    // Staff delete
+    if (interaction.customId === 'staffDeleteModal') {
+      const targetId = interaction.fields.getTextInputValue('targetUserId')
+      if (!bots[targetId]) return interaction.reply({ content: '❌ No bot registered for that user!', ephemeral: true })
+      if (bots[targetId].bot) bots[targetId].bot.quit()
+      delete bots[targetId]
+      await BotModel.deleteOne({ userId: targetId })
+      interaction.reply({ content: `✅ Force deleted bot for <@${targetId}>!`, ephemeral: true })
+      updateDashboard()
+    }
   }
 })
 
