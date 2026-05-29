@@ -253,6 +253,13 @@ client.on('interactionCreate', async (interaction) => {
       const name = interaction.fields.getTextInputValue('botName')
       const ip = interaction.fields.getTextInputValue('botIp')
       const port = parseInt(interaction.fields.getTextInputValue('botPort'))
+
+      // Check if same IP already registered by someone else
+      const existing = await BotModel.findOne({ ip })
+      if (existing && existing.userId !== userId) {
+        return interaction.reply({ content: '❌ This server IP is already registered by someone else! Only one bot per server is allowed!', ephemeral: true })
+      }
+
       bots[userId] = { name, ip, port, bot: null }
       await BotModel.findOneAndUpdate({ userId }, { userId, name, ip, port }, { upsert: true })
       interaction.reply({ content: `Registered! Name: ${name} | IP: ${ip} | Port: ${port}`, ephemeral: true })
@@ -326,9 +333,9 @@ function startBot(userId) {
       }, 2000)
     }, 3000)
   })
-  bot.on('kicked', () => { bots[userId].bot = null; updateDashboard() })
-  bot.on('error', () => { bots[userId].bot = null; updateDashboard() })
-  bot.on('end', () => { bots[userId].bot = null; updateDashboard() })
+  bot.on('kicked', () => { bots[userId].bot = null; updateDashboard(); setTimeout(() => { if (bots[userId]) startBot(userId) }, 60000) })
+  bot.on('error', () => { bots[userId].bot = null; updateDashboard(); setTimeout(() => { if (bots[userId]) startBot(userId) }, 60000) })
+  bot.on('end', () => { bots[userId].bot = null; updateDashboard(); setTimeout(() => { if (bots[userId]) startBot(userId) }, 60000) })
 }
 
 client.login(process.env.TOKEN)
