@@ -46,10 +46,8 @@ client.on('ready', async () => {
 async function updateDashboard() {
   const channel = client.channels.cache.get(STAFF_CHANNEL_ID)
   if (!channel) return
-
   const activeBots = Object.entries(bots).filter(([, data]) => data.bot)
   const totalBots = Object.keys(bots).length
-
   let desc = ''
   if (totalBots === 0) {
     desc = 'No bots registered yet!'
@@ -59,7 +57,6 @@ async function updateDashboard() {
       desc += `╔══════════════════════╗\n  🤖 **${data.name}**\n  🌐 ${data.ip}:${data.port}\n  👤 Registered by <@${userId}>\n  📶 ${status}\n╚══════════════════════╝\n\n`
     }
   }
-
   const embed = new EmbedBuilder()
     .setTitle('🤖 Drippy Core — Live Bot Dashboard')
     .setDescription(desc)
@@ -70,7 +67,6 @@ async function updateDashboard() {
     .setColor(0x9B59B6)
     .setFooter({ text: 'Updates every 30 seconds' })
     .setTimestamp()
-
   try {
     if (dashboardMessageId) {
       const msg = await channel.messages.fetch(dashboardMessageId)
@@ -91,7 +87,6 @@ client.on('messageCreate', async (message) => {
   if (message.content === '!panel') {
     const activeBots = Object.values(bots).filter(b => b.bot).length
     const totalBots = Object.keys(bots).length
-
     const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('register').setLabel('Register').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('start').setLabel('Start Bot').setStyle(ButtonStyle.Success),
@@ -137,12 +132,6 @@ client.on('messageCreate', async (message) => {
       .setTimestamp()
     await message.channel.send({ embeds: [embed], components: [row1, row2] })
   }
-    const embed = new EmbedBuilder()
-      .setTitle('Drippy Core Control Panel 🔥')
-      .setDescription('Use the buttons below to manage your Minecraft bot!')
-      .setColor(0x9B59B6)
-    await message.channel.send({ embeds: [embed], components: [row] })
-  }
 
   if (message.content === '!staffpanel' && message.channel.id === STAFF_CHANNEL_ID) {
     const row = new ActionRowBuilder().addComponents(
@@ -163,7 +152,6 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton()) {
     const userId = interaction.user.id
 
-    // User buttons
     if (interaction.customId === 'register') {
       const modal = new ModalBuilder()
         .setCustomId('registerModal')
@@ -208,7 +196,6 @@ client.on('interactionCreate', async (interaction) => {
       updateDashboard()
     }
 
-    // Staff buttons
     if (interaction.customId === 'staff_configure') {
       const modal = new ModalBuilder()
         .setCustomId('staffConfigureModal')
@@ -255,7 +242,6 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.isModalSubmit()) {
-    // User register
     if (interaction.customId === 'registerModal') {
       const userId = interaction.user.id
       const name = interaction.fields.getTextInputValue('botName')
@@ -267,7 +253,6 @@ client.on('interactionCreate', async (interaction) => {
       updateDashboard()
     }
 
-    // Staff configure
     if (interaction.customId === 'staffConfigureModal') {
       const targetId = interaction.fields.getTextInputValue('targetUserId')
       const name = interaction.fields.getTextInputValue('botName')
@@ -280,7 +265,6 @@ client.on('interactionCreate', async (interaction) => {
       updateDashboard()
     }
 
-    // Staff start
     if (interaction.customId === 'staffStartModal') {
       const targetId = interaction.fields.getTextInputValue('targetUserId')
       if (!bots[targetId]) return interaction.reply({ content: '❌ No bot registered for that user!', ephemeral: true })
@@ -289,7 +273,6 @@ client.on('interactionCreate', async (interaction) => {
       interaction.reply({ content: `✅ Force started bot for <@${targetId}>!`, ephemeral: true })
     }
 
-    // Staff stop
     if (interaction.customId === 'staffStopModal') {
       const targetId = interaction.fields.getTextInputValue('targetUserId')
       if (!bots[targetId] || !bots[targetId].bot) return interaction.reply({ content: '❌ Bot is not running!', ephemeral: true })
@@ -299,7 +282,6 @@ client.on('interactionCreate', async (interaction) => {
       updateDashboard()
     }
 
-    // Staff delete
     if (interaction.customId === 'staffDeleteModal') {
       const targetId = interaction.fields.getTextInputValue('targetUserId')
       if (!bots[targetId]) return interaction.reply({ content: '❌ No bot registered for that user!', ephemeral: true })
