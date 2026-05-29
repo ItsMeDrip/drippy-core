@@ -1,13 +1,25 @@
-const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder } = require('discord.js')
+const {
+  Client,
+  GatewayIntentBits,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  EmbedBuilder
+} = require('discord.js')
 const mineflayer = require('mineflayer')
 const mongoose = require('mongoose')
 const http = require('http')
 
+// ─── Keep-alive server ───────────────────────────────────────────────────────
 http.createServer((req, res) => {
   res.write('Drippy Core is alive! 🔥')
   res.end()
 }).listen(3000)
 
+// ─── MongoDB ─────────────────────────────────────────────────────────────────
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB! 🔥'))
   .catch(err => console.log('MongoDB error:', err))
@@ -27,8 +39,13 @@ const configSchema = new mongoose.Schema({
 const BotModel = mongoose.model('Bot', botSchema)
 const ConfigModel = mongoose.model('Config', configSchema)
 
+// ─── Discord client ───────────────────────────────────────────────────────────
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 })
 
 const bots = {}
@@ -36,6 +53,17 @@ const STATUS_CHANNEL_ID = '1509839183441825925'
 const ADMIN_CHANNEL_ID = '1509839337850671216'
 let dashboardMessageId = null
 
+// ─── Debounce dashboard updates so rapid reconnects don't pile up ─────────────
+let dashboardTimeout = null
+function scheduleDashboardUpdate() {
+  if (dashboardTimeout) return
+  dashboardTimeout = setTimeout(async () => {
+    dashboardTimeout = null
+    await updateDashboard()
+  }, 2000)
+}
+
+// ─── Load bots from DB on startup ────────────────────────────────────────────
 async function loadBotsFromDB() {
   const saved = await BotModel.find()
   for (const b of saved) {
@@ -46,19 +74,23 @@ async function loadBotsFromDB() {
   console.log(`Loaded ${saved.length} bots from database!`)
 }
 
+// ─── Discord ready ────────────────────────────────────────────────────────────
 client.on('ready', async () => {
   console.log(`Drippy Core is online as ${client.user.tag}!`)
   const savedConfig = await ConfigModel.findOne({ key: 'dashboardMessageId' })
   if (savedConfig) dashboardMessageId = savedConfig.value
   await loadBotsFromDB()
-  setInterval(updateDashboard, 30000)
+  setInterval(scheduleDashboardUpdate, 30000)
 })
 
+// ─── Dashboard update ─────────────────────────────────────────────────────────
 async function updateDashboard() {
   const channel = client.channels.cache.get(STATUS_CHANNEL_ID)
   if (!channel) return
+
   const activeBots = Object.entries(bots).filter(([, data]) => data.bot)
   const totalBots = Object.keys(bots).length
+
   let desc = ''
   if (totalBots === 0) {
     desc = 'No bots registered yet!'
@@ -68,6 +100,7 @@ async function updateDashboard() {
       desc += `╔══════════════════════╗\n  🤖 **${data.name}**\n  🌐 ${data.ip}:${data.port}\n  👤 Registered by <@${userId}>\n  📶 ${status}\n╚══════════════════════╝\n\n`
     }
   }
+
   const embed = new EmbedBuilder()
     .setTitle('🤖 Drippy Core — Live Bot Dashboard')
     .setDescription(desc)
@@ -78,6 +111,7 @@ async function updateDashboard() {
     .setColor(0x9B59B6)
     .setFooter({ text: 'Updates every 30 seconds' })
     .setTimestamp()
+
   try {
     if (dashboardMessageId) {
       const msg = await channel.messages.fetch(dashboardMessageId)
@@ -85,15 +119,24 @@ async function updateDashboard() {
     } else {
       const msg = await channel.send({ embeds: [embed] })
       dashboardMessageId = msg.id
-      await ConfigModel.findOneAndUpdate({ key: 'dashboardMessageId' }, { key: 'dashboardMessageId', value: msg.id }, { upsert: true })
+      await ConfigModel.findOneAndUpdate(
+        { key: 'dashboardMessageId' },
+        { key: 'dashboardMessageId', value: msg.id },
+        { upsert: true }
+      )
     }
   } catch {
     const msg = await channel.send({ embeds: [embed] })
     dashboardMessageId = msg.id
-    await ConfigModel.findOneAndUpdate({ key: 'dashboardMessageId' }, { key: 'dashboardMessageId', value: msg.id }, { upsert: true })
+    await ConfigModel.findOneAndUpdate(
+      { key: 'dashboardMessageId' },
+      { key: 'dashboardMessageId', value: msg.id },
+      { upsert: true }
+    )
   }
 }
 
+// ─── Message commands ─────────────────────────────────────────────────────────
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return
 
@@ -154,21 +197,23 @@ client.on('messageCreate', async (message) => {
   }
 })
 
+// ─── Interactions ─────────────────────────────────────────────────────────────
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton()) {
     const userId = interaction.user.id
 
     if (interaction.customId === 'register') {
-      const modal = new ModalBuilder()
-        .setCustomId('registerModal')
-        .setTitle('Register Your Bot')
-      const nameInput = new TextInputBuilder().setCustomId('botName').setLabel('Bot Username').setStyle(TextInputStyle.Short).setRequired(true)
-      const ipInput = new TextInputBuilder().setCustomId('botIp').setLabel('Server IP').setStyle(TextInputStyle.Short).setRequired(true)
-      const portInput = new TextInputBuilder().setCustomId('botPort').setLabel('Server Port').setStyle(TextInputStyle.Short).setRequired(true)
+      const modal = new ModalBuilder().setCustomId('registerModal').setTitle('Register Your Bot')
       modal.addComponents(
-        new ActionRowBuilder().addComponents(nameInput),
-        new ActionRowBuilder().addComponents(ipInput),
-        new ActionRowBuilder().addComponents(portInput)
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('botName').setLabel('Bot Username').setStyle(TextInputStyle.Short).setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('botIp').setLabel('Server IP').setStyle(TextInputStyle.Short).setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('botPort').setLabel('Server Port').setStyle(TextInputStyle.Short).setRequired(true)
+        )
       )
       await interaction.showModal(modal)
     }
@@ -188,61 +233,65 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.customId === 'stop') {
       if (!bots[userId] || !bots[userId].bot) return interaction.reply({ content: 'Bot is not running!', ephemeral: true })
-      bots[userId].bot.quit()
-      bots[userId].bot = null
+      cleanupBot(userId)
       interaction.reply({ content: 'Bot stopped! 🔴', ephemeral: true })
     }
 
     if (interaction.customId === 'delete') {
       if (!bots[userId]) return interaction.reply({ content: 'You are not registered!', ephemeral: true })
-      if (bots[userId].bot) bots[userId].bot.quit()
+      cleanupBot(userId)
       delete bots[userId]
       await BotModel.deleteOne({ userId })
       interaction.reply({ content: 'Bot deleted! You can register again.', ephemeral: true })
-      updateDashboard()
+      scheduleDashboardUpdate()
     }
 
     if (interaction.customId === 'staff_configure') {
-      const modal = new ModalBuilder()
-        .setCustomId('staffConfigureModal')
-        .setTitle('Configure Bot')
-      const userIdInput = new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to configure').setStyle(TextInputStyle.Short).setRequired(true)
-      const nameInput = new TextInputBuilder().setCustomId('botName').setLabel('New Bot Username').setStyle(TextInputStyle.Short).setRequired(true)
-      const ipInput = new TextInputBuilder().setCustomId('botIp').setLabel('New Server IP').setStyle(TextInputStyle.Short).setRequired(true)
-      const portInput = new TextInputBuilder().setCustomId('botPort').setLabel('New Server Port').setStyle(TextInputStyle.Short).setRequired(true)
+      const modal = new ModalBuilder().setCustomId('staffConfigureModal').setTitle('Configure Bot')
       modal.addComponents(
-        new ActionRowBuilder().addComponents(userIdInput),
-        new ActionRowBuilder().addComponents(nameInput),
-        new ActionRowBuilder().addComponents(ipInput),
-        new ActionRowBuilder().addComponents(portInput)
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to configure').setStyle(TextInputStyle.Short).setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('botName').setLabel('New Bot Username').setStyle(TextInputStyle.Short).setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('botIp').setLabel('New Server IP').setStyle(TextInputStyle.Short).setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('botPort').setLabel('New Server Port').setStyle(TextInputStyle.Short).setRequired(true)
+        )
       )
       await interaction.showModal(modal)
     }
 
     if (interaction.customId === 'staff_start') {
-      const modal = new ModalBuilder()
-        .setCustomId('staffStartModal')
-        .setTitle('Force Start Bot')
-      const userIdInput = new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to start bot for').setStyle(TextInputStyle.Short).setRequired(true)
-      modal.addComponents(new ActionRowBuilder().addComponents(userIdInput))
+      const modal = new ModalBuilder().setCustomId('staffStartModal').setTitle('Force Start Bot')
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to start bot for').setStyle(TextInputStyle.Short).setRequired(true)
+        )
+      )
       await interaction.showModal(modal)
     }
 
     if (interaction.customId === 'staff_stop') {
-      const modal = new ModalBuilder()
-        .setCustomId('staffStopModal')
-        .setTitle('Force Stop Bot')
-      const userIdInput = new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to stop bot for').setStyle(TextInputStyle.Short).setRequired(true)
-      modal.addComponents(new ActionRowBuilder().addComponents(userIdInput))
+      const modal = new ModalBuilder().setCustomId('staffStopModal').setTitle('Force Stop Bot')
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to stop bot for').setStyle(TextInputStyle.Short).setRequired(true)
+        )
+      )
       await interaction.showModal(modal)
     }
 
     if (interaction.customId === 'staff_delete') {
-      const modal = new ModalBuilder()
-        .setCustomId('staffDeleteModal')
-        .setTitle('Force Delete Bot')
-      const userIdInput = new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to delete bot for').setStyle(TextInputStyle.Short).setRequired(true)
-      modal.addComponents(new ActionRowBuilder().addComponents(userIdInput))
+      const modal = new ModalBuilder().setCustomId('staffDeleteModal').setTitle('Force Delete Bot')
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to delete bot for').setStyle(TextInputStyle.Short).setRequired(true)
+        )
+      )
       await interaction.showModal(modal)
     }
   }
@@ -254,16 +303,21 @@ client.on('interactionCreate', async (interaction) => {
       const ip = interaction.fields.getTextInputValue('botIp')
       const port = parseInt(interaction.fields.getTextInputValue('botPort'))
 
-      // Check if same IP already registered by someone else
-      const existing = await BotModel.findOne({ ip })
-      if (existing && existing.userId !== userId) {
+      const existingUser = await BotModel.findOne({ userId })
+      if (existingUser) {
+        return interaction.reply({ content: '❌ You already have a bot registered! Stop and Delete it first before registering a new one.', ephemeral: true })
+      
+      }
+
+      const existingIp = await BotModel.findOne({ ip })
+      if (existingIp && existingIp.userId !== userId) {
         return interaction.reply({ content: '❌ This server IP is already registered by someone else! Only one bot per server is allowed!', ephemeral: true })
       }
 
       bots[userId] = { name, ip, port, bot: null }
       await BotModel.findOneAndUpdate({ userId }, { userId, name, ip, port }, { upsert: true })
       interaction.reply({ content: `Registered! Name: ${name} | IP: ${ip} | Port: ${port}`, ephemeral: true })
-      updateDashboard()
+      scheduleDashboardUpdate()
     }
 
     if (interaction.customId === 'staffConfigureModal') {
@@ -271,11 +325,11 @@ client.on('interactionCreate', async (interaction) => {
       const name = interaction.fields.getTextInputValue('botName')
       const ip = interaction.fields.getTextInputValue('botIp')
       const port = parseInt(interaction.fields.getTextInputValue('botPort'))
-      if (bots[targetId] && bots[targetId].bot) { bots[targetId].bot.quit(); bots[targetId].bot = null }
+      cleanupBot(targetId)
       bots[targetId] = { name, ip, port, bot: null }
       await BotModel.findOneAndUpdate({ userId: targetId }, { userId: targetId, name, ip, port }, { upsert: true })
       interaction.reply({ content: `✅ Configured bot for <@${targetId}>! Name: ${name} | IP: ${ip} | Port: ${port}`, ephemeral: true })
-      updateDashboard()
+      scheduleDashboardUpdate()
     }
 
     if (interaction.customId === 'staffStartModal') {
@@ -289,26 +343,51 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'staffStopModal') {
       const targetId = interaction.fields.getTextInputValue('targetUserId')
       if (!bots[targetId] || !bots[targetId].bot) return interaction.reply({ content: '❌ Bot is not running!', ephemeral: true })
-      bots[targetId].bot.quit()
-      bots[targetId].bot = null
+      cleanupBot(targetId)
       interaction.reply({ content: `✅ Force stopped bot for <@${targetId}>!`, ephemeral: true })
-      updateDashboard()
+      scheduleDashboardUpdate()
     }
 
     if (interaction.customId === 'staffDeleteModal') {
       const targetId = interaction.fields.getTextInputValue('targetUserId')
       if (!bots[targetId]) return interaction.reply({ content: '❌ No bot registered for that user!', ephemeral: true })
-      if (bots[targetId].bot) bots[targetId].bot.quit()
+      cleanupBot(targetId)
       delete bots[targetId]
       await BotModel.deleteOne({ userId: targetId })
       interaction.reply({ content: `✅ Force deleted bot for <@${targetId}>!`, ephemeral: true })
-      updateDashboard()
+      scheduleDashboardUpdate()
     }
   }
 })
 
+// ─── Safely stop a bot and clear its interval ─────────────────────────────────
+function cleanupBot(userId) {
+  if (!bots[userId]) return
+  const data = bots[userId]
+
+  // Clear AFK interval
+  if (data.afkInterval) {
+    clearInterval(data.afkInterval)
+    data.afkInterval = null
+  }
+
+  // Remove all listeners and quit
+  if (data.bot) {
+    data.bot.removeAllListeners()
+    try { data.bot.quit() } catch {}
+    data.bot = null
+  }
+}
+
+// ─── Start a mineflayer bot ───────────────────────────────────────────────────
 function startBot(userId) {
+  if (!bots[userId]) return
+
+  // Always clean up any existing bot first
+  cleanupBot(userId)
+
   const { name, ip, port } = bots[userId]
+
   const bot = mineflayer.createBot({
     host: ip,
     port: port,
@@ -316,16 +395,20 @@ function startBot(userId) {
     version: '1.20.1',
     auth: 'offline'
   })
+
   bots[userId].bot = bot
+
   bot.once('spawn', () => {
     console.log(`${name} is online!`)
-    updateDashboard()
+    scheduleDashboardUpdate()
+
     setTimeout(() => {
       bot.chat('/register pass123 pass123')
       setTimeout(() => {
         bot.chat('/login pass123')
         setTimeout(() => {
-          setInterval(() => {
+          // Store interval so we can clear it later
+          bots[userId].afkInterval = setInterval(() => {
             bot.setControlState('jump', true)
             setTimeout(() => bot.setControlState('jump', false), 500)
           }, 30000)
@@ -333,9 +416,20 @@ function startBot(userId) {
       }, 2000)
     }, 3000)
   })
-  bot.on('kicked', () => { bots[userId].bot = null; updateDashboard(); setTimeout(() => { if (bots[userId]) startBot(userId) }, 60000) })
-  bot.on('error', () => { bots[userId].bot = null; updateDashboard(); setTimeout(() => { if (bots[userId]) startBot(userId) }, 60000) })
-  bot.on('end', () => { bots[userId].bot = null; updateDashboard(); setTimeout(() => { if (bots[userId]) startBot(userId) }, 60000) })
+
+  const handleDisconnect = () => {
+    console.log(`${name} disconnected, will retry in 60s...`)
+    cleanupBot(userId)
+    scheduleDashboardUpdate()
+    setTimeout(() => {
+      if (bots[userId]) startBot(userId)
+    }, 60000)
+  }
+
+  bot.on('kicked', handleDisconnect)
+  bot.on('error', handleDisconnect)
+  bot.on('end', handleDisconnect)
 }
 
+// ─── Login ────────────────────────────────────────────────────────────────────
 client.login(process.env.TOKEN)
