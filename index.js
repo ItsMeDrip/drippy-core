@@ -19,7 +19,13 @@ const botSchema = new mongoose.Schema({
   port: Number
 })
 
+const configSchema = new mongoose.Schema({
+  key: String,
+  value: String
+})
+
 const BotModel = mongoose.model('Bot', botSchema)
+const ConfigModel = mongoose.model('Config', configSchema)
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
@@ -41,6 +47,8 @@ async function loadBotsFromDB() {
 
 client.on('ready', async () => {
   console.log(`Drippy Core is online as ${client.user.tag}!`)
+  const savedConfig = await ConfigModel.findOne({ key: 'dashboardMessageId' })
+  if (savedConfig) dashboardMessageId = savedConfig.value
   await loadBotsFromDB()
   setInterval(updateDashboard, 30000)
 })
@@ -76,10 +84,12 @@ async function updateDashboard() {
     } else {
       const msg = await channel.send({ embeds: [embed] })
       dashboardMessageId = msg.id
+      await ConfigModel.findOneAndUpdate({ key: 'dashboardMessageId' }, { key: 'dashboardMessageId', value: msg.id }, { upsert: true })
     }
   } catch {
     const msg = await channel.send({ embeds: [embed] })
     dashboardMessageId = msg.id
+    await ConfigModel.findOneAndUpdate({ key: 'dashboardMessageId' }, { key: 'dashboardMessageId', value: msg.id }, { upsert: true })
   }
 }
 
