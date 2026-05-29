@@ -416,3 +416,7 @@ function startBot(userId) {
     handleDisconnect('Connection ended')
   })
 }
+
+
+
+client.login(process.env.TOKEN)
