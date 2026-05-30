@@ -377,9 +377,18 @@ function startBot(userId) {
     auth: 'offline'
   })
   bots[userId].bot = bot
-  bot.once('spawn', () => {
+  bot.once('spawn', async () => {
     console.log(`${name} is online on Core ${CORE_ID}!`)
     scheduleDashboardUpdate()
+    try {
+      const alertChannel = client.channels.cache.get('1510334072533291089')
+      if (alertChannel) {
+        const isReconnect = bots[userId].hasConnectedBefore || false
+        bots[userId].hasConnectedBefore = true
+        const statusMsg = isReconnect ? '🟢 Reconnected Successfully!' : '🟢 Bot Started Successfully!'
+        await alertChannel.send(`<@${userId}>\n\n✅ **Drippy Core Alert!**\n\n**Bot:** ${name}\n**Server:** ${ip}:${port}\n**Status:** ${statusMsg}\n\n─────────────────────\n🔥 Drippy Core | DrippyBlox`)
+      }
+    } catch {}
     setTimeout(() => {
       bot.chat('/register pass123 pass123')
       setTimeout(() => {
@@ -393,15 +402,34 @@ function startBot(userId) {
       }, 2000)
     }, 3000)
   })
-  const handleDisconnect = () => {
-    console.log(`${name} disconnected, retrying in 60s...`)
+  bot.on('kicked', async (reason) => {
+    const cleanReason = typeof reason === 'string' ? reason : JSON.stringify(reason)
+    console.log(`${name} got kicked: ${cleanReason}`)
+    cleanupBot(userId)
+    scheduleDashboardUpdate()
+    // Only notify if kicked by server not by us
+    const ignoredReasons = ['disconnect.quitting', 'disconnect.genericReason']
+    const isOurFault = ignoredReasons.some(r => cleanReason.includes(r))
+    if (!isOurFault) {
+      try {
+        const alertChannel = client.channels.cache.get('1510334072533291089')
+        if (alertChannel) {
+          await alertChannel.send(`<@${userId}>\n\n🚨 **Drippy Core Alert!**\n\n**Bot:** ${name}\n**Server:** ${ip}:${port}\n**Status:** 🔴 Kicked\n**Reason:** ${cleanReason}\n\n🔄 Bot will automatically try to reconnect in **60 seconds!**\n\n─────────────────────\n🔥 Drippy Core | DrippyBlox`)
+        }
+      } catch {}
+    }
+    setTimeout(() => { if (bots[userId]) startBot(userId) }, 60000)
+  })
+  bot.on('error', () => {
     cleanupBot(userId)
     scheduleDashboardUpdate()
     setTimeout(() => { if (bots[userId]) startBot(userId) }, 60000)
-  }
-  bot.on('kicked', handleDisconnect)
-  bot.on('error', handleDisconnect)
-  bot.on('end', handleDisconnect)
+  })
+  bot.on('end', () => {
+    cleanupBot(userId)
+    scheduleDashboardUpdate()
+    setTimeout(() => { if (bots[userId]) startBot(userId) }, 60000)
+  })
 }
 
 client.login(process.env.TOKEN)
