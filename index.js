@@ -58,12 +58,34 @@ async function loadBotsFromDB() {
   console.log(`Loaded ${saved.length} bots on Core ${CORE_ID}!`)
 }
 
+async function pollForNewBots() {
+  const myBots = await BotModel.find({ owner: CORE_ID })
+  for (const b of myBots) {
+    if (!bots[b.userId]) {
+      console.log(`New bot assigned to Core ${CORE_ID}: ${b.name}`)
+      bots[b.userId] = { name: b.name, ip: b.ip, port: b.port, bot: null }
+      startBot(b.userId)
+    }
+  }
+  // Remove bots no longer assigned to this core
+  for (const userId of Object.keys(bots)) {
+    const found = myBots.find(b => b.userId === userId)
+    if (!found) {
+      console.log(`Bot removed from Core ${CORE_ID}`)
+      cleanupBot(userId)
+      delete bots[userId]
+    }
+  }
+  scheduleDashboardUpdate()
+}
+
 client.on('ready', async () => {
   console.log(`Drippy Core ${CORE_ID} is online as ${client.user.tag}!`)
   const savedConfig = await ConfigModel.findOne({ key: `dashboardMessageId_${CORE_ID}` })
   if (savedConfig) dashboardMessageId = savedConfig.value
   await loadBotsFromDB()
   setInterval(scheduleDashboardUpdate, 60000)
+  setInterval(pollForNewBots, 120000)
 })
 
 async function updateDashboard() {
@@ -110,7 +132,7 @@ async function updateDashboard() {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return
 
-  if (message.content === '!panel') {
+  if (message.content === '!panel' && CORE_ID === 1) {
     const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('register').setLabel('Register').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('start').setLabel('Start Bot').setStyle(ButtonStyle.Success),
@@ -160,7 +182,8 @@ client.on('messageCreate', async (message) => {
       new ButtonBuilder().setCustomId('staff_delete').setLabel('🗑️ Force Delete').setStyle(ButtonStyle.Danger)
     )
     const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('start_backup').setLabel('🔀 Start Backup').setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId('start_backup').setLabel('🔀 Balance Cores').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('stop_backup').setLabel('⏹️ Stop All Core 2+').setStyle(ButtonStyle.Danger)
     )
     const embed = new EmbedBuilder()
       .setTitle('👮 Drippy Core — Staff Panel')
@@ -226,6 +249,15 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.followUp({ content: `✅ Done! ${half} bots on Core 1, ${total - half} bots on Core 2! Restart both Railway services now!`, ephemeral: true })
     }
 
+    if (interaction.customId === 'stop_backup') {
+      await interaction.reply({ content: '⏹️ Stopping all bots on Core 2 and above...', ephemeral: true })
+      const backupBots = await BotModel.find({ owner: { $gt: 1 } })
+      for (const b of backupBots) {
+        await BotModel.findOneAndUpdate({ userId: b.userId }, { owner: 1 })
+      }
+      await interaction.followUp({ content: `✅ Done! All bots moved back to Core 1!`, ephemeral: true })
+    }
+
     if (interaction.customId === 'staff_configure') {
       const modal = new ModalBuilder().setCustomId('staffConfigureModal').setTitle('Configure Bot')
       modal.addComponents(
@@ -262,6 +294,11 @@ client.on('interactionCreate', async (interaction) => {
       const name = interaction.fields.getTextInputValue('botName')
       const ip = interaction.fields.getTextInputValue('botIp')
       const port = parseInt(interaction.fields.getTextInputValue('botPort'))
+
+      const userExisting = await BotModel.findOne({ userId })
+      if (userExisting) {
+        return interaction.reply({ content: '❌ You already have a bot registered! Delete it first!', ephemeral: true })
+      }
 
       const existing = await BotModel.findOne({ ip })
       if (existing && existing.userId !== userId) {
