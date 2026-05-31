@@ -181,15 +181,39 @@ client.on('messageCreate', async (message) => {
       new ButtonBuilder().setCustomId('staff_stop').setLabel('⏹️ Force Stop').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId('staff_delete').setLabel('🗑️ Force Delete').setStyle(ButtonStyle.Danger)
     )
-    const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('start_backup').setLabel('🔀 Balance Cores').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('stop_backup').setLabel('⏹️ Stop All Core 2+').setStyle(ButtonStyle.Danger)
-    )
+
+    let row2
+    if (CORE_ID === 1) {
+      row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('stop_backup').setLabel('⏹️ Stop All Core 2+').setStyle(ButtonStyle.Danger)
+      )
+    } else if (CORE_ID === 2) {
+      row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('balance_1_2').setLabel('🔀 Balance Core 1 & 2').setStyle(ButtonStyle.Primary)
+      )
+    } else if (CORE_ID === 3) {
+      row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('balance_1_3').setLabel('🔀 Balance Core 1 & 3').setStyle(ButtonStyle.Primary)
+      )
+    }
+
     const embed = new EmbedBuilder()
-      .setTitle('👮 Drippy Core — Staff Panel')
-      .setDescription('Manage any registered bot from here!\n\n🔀 **Start Backup** — splits bots 50/50 between Core 1 and Core 2!')
+      .setTitle(`👮 Drippy Core ${CORE_ID} — Staff Panel`)
+      .setDescription('Manage any registered bot from here!')
       .setColor(0xFF0000)
     await message.channel.send({ embeds: [embed], components: [row1, row2] })
+  }
+
+  if (message.content === '!overallpanel' && message.channel.id === ADMIN_CHANNEL_ID && CORE_ID === 1) {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('balance_all').setLabel('🔀 Balance All Cores').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('stop_all_backup').setLabel('⏹️ Stop All Backup').setStyle(ButtonStyle.Danger)
+    )
+    const embed = new EmbedBuilder()
+      .setTitle('🌐 Drippy Core — Overall Panel')
+      .setDescription('Control all cores from here!\n\n🔀 **Balance All** — splits bots evenly across all 3 cores!\n⏹️ **Stop All Backup** — moves everything back to Core 1!')
+      .setColor(0x9B59B6)
+    await message.channel.send({ embeds: [embed], components: [row] })
   }
 })
 
@@ -255,6 +279,45 @@ client.on('interactionCreate', async (interaction) => {
       for (const b of backupBots) {
         await BotModel.findOneAndUpdate({ userId: b.userId }, { owner: 1 })
       }
+      await interaction.followUp({ content: `✅ Done! All bots moved back to Core 1!`, ephemeral: true })
+    }
+
+    if (interaction.customId === 'balance_1_2') {
+      await interaction.reply({ content: '🔀 Balancing bots between Core 1 and Core 2...', ephemeral: true })
+      const allBots = await BotModel.find({ owner: { $in: [1, 2] } })
+      const total = allBots.length
+      const half = Math.ceil(total / 2)
+      for (let i = 0; i < total; i++) {
+        await BotModel.findOneAndUpdate({ userId: allBots[i].userId }, { owner: i < half ? 1 : 2 })
+      }
+      await interaction.followUp({ content: `✅ Done! ${half} bots on Core 1, ${total - half} bots on Core 2!`, ephemeral: true })
+    }
+
+    if (interaction.customId === 'balance_1_3') {
+      await interaction.reply({ content: '🔀 Balancing bots between Core 1 and Core 3...', ephemeral: true })
+      const allBots = await BotModel.find({ owner: { $in: [1, 3] } })
+      const total = allBots.length
+      const half = Math.ceil(total / 2)
+      for (let i = 0; i < total; i++) {
+        await BotModel.findOneAndUpdate({ userId: allBots[i].userId }, { owner: i < half ? 1 : 3 })
+      }
+      await interaction.followUp({ content: `✅ Done! ${half} bots on Core 1, ${total - half} bots on Core 3!`, ephemeral: true })
+    }
+
+    if (interaction.customId === 'balance_all') {
+      await interaction.reply({ content: '🔀 Balancing bots across all 3 cores...', ephemeral: true })
+      const allBots = await BotModel.find()
+      const total = allBots.length
+      for (let i = 0; i < total; i++) {
+        const core = (i % 3) + 1
+        await BotModel.findOneAndUpdate({ userId: allBots[i].userId }, { owner: core })
+      }
+      await interaction.followUp({ content: `✅ Done! Bots balanced across Core 1, 2 and 3!`, ephemeral: true })
+    }
+
+    if (interaction.customId === 'stop_all_backup') {
+      await interaction.reply({ content: '⏹️ Moving all bots back to Core 1...', ephemeral: true })
+      await BotModel.updateMany({}, { owner: 1 })
       await interaction.followUp({ content: `✅ Done! All bots moved back to Core 1!`, ephemeral: true })
     }
 
