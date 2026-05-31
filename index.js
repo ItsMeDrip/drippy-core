@@ -202,6 +202,7 @@ client.on('messageCreate', async (message) => {
 })
 
 client.on('interactionCreate', async (interaction) => {
+  if (CORE_ID !== 1) return
   if (interaction.isButton()) {
     const userId = interaction.user.id
 
