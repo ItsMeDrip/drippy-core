@@ -385,8 +385,17 @@ function startBot(userId) {
       if (alertChannel) {
         const isReconnect = bots[userId].hasConnectedBefore || false
         bots[userId].hasConnectedBefore = true
-        const statusMsg = isReconnect ? '🟢 Reconnected Successfully!' : '🟢 Bot Started Successfully!'
-        await alertChannel.send(`<@${userId}>\n\n✅ **Drippy Core Alert!**\n\n**Bot:** ${name}\n**Server:** ${ip}:${port}\n**Status:** ${statusMsg}\n\n─────────────────────\n🔥 Drippy Core | DrippyBlox`)
+        const spawnEmbed = new EmbedBuilder()
+          .setTitle(isReconnect ? '🟢 Bot Reconnected Successfully!' : '🟢 Bot Started Successfully!')
+          .addFields(
+            { name: 'User', value: `<@${userId}>`, inline: true },
+            { name: 'Bot', value: name, inline: true },
+            { name: 'Server', value: `${ip}:${port}`, inline: false }
+          )
+          .setColor(0x00FF00)
+          .setFooter({ text: 'Drippy Core System' })
+          .setTimestamp()
+        await alertChannel.send({ embeds: [spawnEmbed] })
       }
     } catch {}
     setTimeout(() => {
@@ -414,7 +423,18 @@ function startBot(userId) {
       try {
         const alertChannel = client.channels.cache.get('1510334072533291089')
         if (alertChannel) {
-          await alertChannel.send(`<@${userId}>\n\n🚨 **Drippy Core Alert!**\n\n**Bot:** ${name}\n**Server:** ${ip}:${port}\n**Status:** 🔴 Kicked\n**Reason:** ${cleanReason}\n\n🔄 Bot will automatically try to reconnect in **60 seconds!**\n\n─────────────────────\n🔥 Drippy Core | DrippyBlox`)
+        const kickEmbed = new EmbedBuilder()
+          .setTitle('🔴 Bot Kicked!')
+          .addFields(
+            { name: 'User', value: `<@${userId}>`, inline: true },
+            { name: 'Bot', value: name, inline: true },
+            { name: 'Server', value: `${ip}:${port}`, inline: false },
+            { name: 'Reason', value: cleanReason, inline: false }
+          )
+          .setColor(0xFF0000)
+          .setFooter({ text: 'Drippy Core System' })
+          .setTimestamp()
+        await alertChannel.send({ content: `<@${userId}>`, embeds: [kickEmbed] })
         }
       } catch {}
     }
