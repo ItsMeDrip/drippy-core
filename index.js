@@ -334,7 +334,11 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.customId === 'staffStartModal') {
       const targetId = interaction.fields.getTextInputValue('targetUserId')
-      if (!bots[targetId]) return interaction.reply({ content: '❌ No bot registered for that user!', ephemeral: true })
+      const userBot = await BotModel.findOne({ userId: targetId })
+      if (!userBot && !bots[targetId]) return interaction.reply({ content: '❌ No bot registered for that user!', ephemeral: true })
+      if (!bots[targetId]) {
+        bots[targetId] = { name: userBot.name, ip: userBot.ip, port: userBot.port, bot: null }
+      }
       if (bots[targetId].bot) return interaction.reply({ content: '❌ Bot is already running!', ephemeral: true })
       startBot(targetId)
       interaction.reply({ content: `✅ Force started bot for <@${targetId}>!`, ephemeral: true })
@@ -350,7 +354,8 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.customId === 'staffDeleteModal') {
       const targetId = interaction.fields.getTextInputValue('targetUserId')
-      if (!bots[targetId]) return interaction.reply({ content: '❌ No bot registered for that user!', ephemeral: true })
+      const userBotDel = await BotModel.findOne({ userId: targetId })
+      if (!userBotDel && !bots[targetId]) return interaction.reply({ content: '❌ No bot registered for that user!', ephemeral: true })
       cleanupBot(targetId)
       delete bots[targetId]
       await BotModel.deleteOne({ userId: targetId })
