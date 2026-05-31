@@ -181,27 +181,11 @@ client.on('messageCreate', async (message) => {
       new ButtonBuilder().setCustomId('staff_stop').setLabel('⏹️ Force Stop').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId('staff_delete').setLabel('🗑️ Force Delete').setStyle(ButtonStyle.Danger)
     )
-
-    let row2
-    if (CORE_ID === 1) {
-      row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('stop_backup').setLabel('⏹️ Stop All Core 2+').setStyle(ButtonStyle.Danger)
-      )
-    } else if (CORE_ID === 2) {
-      row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('balance_1_2').setLabel('🔀 Balance Core 1 & 2').setStyle(ButtonStyle.Primary)
-      )
-    } else if (CORE_ID === 3) {
-      row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('balance_1_3').setLabel('🔀 Balance Core 1 & 3').setStyle(ButtonStyle.Primary)
-      )
-    }
-
     const embed = new EmbedBuilder()
       .setTitle(`👮 Drippy Core ${CORE_ID} — Staff Panel`)
       .setDescription('Manage any registered bot from here!')
       .setColor(0xFF0000)
-    await message.channel.send({ embeds: [embed], components: [row1, row2] })
+    await message.channel.send({ embeds: [embed], components: [row1] })
   }
 
   if (message.content === '!overallpanel' && message.channel.id === ADMIN_CHANNEL_ID && CORE_ID === 1) {
@@ -225,21 +209,25 @@ client.on('interactionCreate', async (interaction) => {
       const modal = new ModalBuilder().setCustomId('registerModal').setTitle('Register Your Bot')
       modal.addComponents(
         new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('botName').setLabel('Bot Username').setStyle(TextInputStyle.Short).setRequired(true)),
-        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('botIp').setLabel('Server IP').setStyle(TextInputStyle.Short).setRequired(true)),
-        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('botPort').setLabel('Server Port').setStyle(TextInputStyle.Short).setRequired(true))
+        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('botAddress').setLabel('Server Address (e.g name.aternos.me:12345)').setStyle(TextInputStyle.Short).setRequired(true))
       )
       await interaction.showModal(modal)
     }
 
     if (interaction.customId === 'start') {
-      if (!bots[userId]) return interaction.reply({ content: 'You are not registered! Click Register first.', ephemeral: true })
+      const userBot = await BotModel.findOne({ userId })
+      if (!userBot) return interaction.reply({ content: 'You are not registered! Click Register first.', ephemeral: true })
+      if (!bots[userId]) {
+        bots[userId] = { name: userBot.name, ip: userBot.ip, port: userBot.port, bot: null }
+      }
       if (bots[userId].bot) return interaction.reply({ content: 'Bot is already running!', ephemeral: true })
       startBot(userId)
       interaction.reply({ content: 'Bot is starting! 🚀', ephemeral: true })
     }
 
     if (interaction.customId === 'status') {
-      if (!bots[userId]) return interaction.reply({ content: 'You are not registered!', ephemeral: true })
+      const userBot = await BotModel.findOne({ userId })
+      if (!userBot && !bots[userId]) return interaction.reply({ content: 'You are not registered!', ephemeral: true })
       const status = bots[userId].bot ? '🟢 Online' : '🔴 Offline'
       interaction.reply({ content: `Bot Status: ${status}`, ephemeral: true })
     }
@@ -251,57 +239,13 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'delete') {
-      if (!bots[userId]) return interaction.reply({ content: 'You are not registered!', ephemeral: true })
+      const userBot = await BotModel.findOne({ userId })
+      if (!userBot && !bots[userId]) return interaction.reply({ content: 'You are not registered!', ephemeral: true })
       cleanupBot(userId)
       delete bots[userId]
       await BotModel.deleteOne({ userId })
       interaction.reply({ content: 'Bot deleted! You can register again.', ephemeral: true })
       scheduleDashboardUpdate()
-    }
-
-    if (interaction.customId === 'start_backup') {
-      await interaction.reply({ content: '🔀 Splitting bots between Core 1 and Core 2...', ephemeral: true })
-      const allBots = await BotModel.find()
-      const total = allBots.length
-      const half = Math.ceil(total / 2)
-
-      for (let i = 0; i < total; i++) {
-        const newOwner = i < half ? 1 : 2
-        await BotModel.findOneAndUpdate({ userId: allBots[i].userId }, { owner: newOwner })
-      }
-
-      await interaction.followUp({ content: `✅ Done! ${half} bots on Core 1, ${total - half} bots on Core 2! Restart both Railway services now!`, ephemeral: true })
-    }
-
-    if (interaction.customId === 'stop_backup') {
-      await interaction.reply({ content: '⏹️ Stopping all bots on Core 2 and above...', ephemeral: true })
-      const backupBots = await BotModel.find({ owner: { $gt: 1 } })
-      for (const b of backupBots) {
-        await BotModel.findOneAndUpdate({ userId: b.userId }, { owner: 1 })
-      }
-      await interaction.followUp({ content: `✅ Done! All bots moved back to Core 1!`, ephemeral: true })
-    }
-
-    if (interaction.customId === 'balance_1_2') {
-      await interaction.reply({ content: '🔀 Balancing bots between Core 1 and Core 2...', ephemeral: true })
-      const allBots = await BotModel.find({ owner: { $in: [1, 2] } })
-      const total = allBots.length
-      const half = Math.ceil(total / 2)
-      for (let i = 0; i < total; i++) {
-        await BotModel.findOneAndUpdate({ userId: allBots[i].userId }, { owner: i < half ? 1 : 2 })
-      }
-      await interaction.followUp({ content: `✅ Done! ${half} bots on Core 1, ${total - half} bots on Core 2!`, ephemeral: true })
-    }
-
-    if (interaction.customId === 'balance_1_3') {
-      await interaction.reply({ content: '🔀 Balancing bots between Core 1 and Core 3...', ephemeral: true })
-      const allBots = await BotModel.find({ owner: { $in: [1, 3] } })
-      const total = allBots.length
-      const half = Math.ceil(total / 2)
-      for (let i = 0; i < total; i++) {
-        await BotModel.findOneAndUpdate({ userId: allBots[i].userId }, { owner: i < half ? 1 : 3 })
-      }
-      await interaction.followUp({ content: `✅ Done! ${half} bots on Core 1, ${total - half} bots on Core 3!`, ephemeral: true })
     }
 
     if (interaction.customId === 'balance_all') {
@@ -326,8 +270,7 @@ client.on('interactionCreate', async (interaction) => {
       modal.addComponents(
         new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('targetUserId').setLabel('User ID to configure').setStyle(TextInputStyle.Short).setRequired(true)),
         new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('botName').setLabel('New Bot Username').setStyle(TextInputStyle.Short).setRequired(true)),
-        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('botIp').setLabel('New Server IP').setStyle(TextInputStyle.Short).setRequired(true)),
-        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('botPort').setLabel('New Server Port').setStyle(TextInputStyle.Short).setRequired(true))
+        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('botAddress').setLabel('New Server Address (e.g name.aternos.me:12345)').setStyle(TextInputStyle.Short).setRequired(true))
       )
       await interaction.showModal(modal)
     }
@@ -355,8 +298,10 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'registerModal') {
       const userId = interaction.user.id
       const name = interaction.fields.getTextInputValue('botName')
-      const ip = interaction.fields.getTextInputValue('botIp')
-      const port = parseInt(interaction.fields.getTextInputValue('botPort'))
+      const address = interaction.fields.getTextInputValue('botAddress')
+      const [ip, portStr] = address.split(':')
+      const port = parseInt(portStr)
+      if (!ip || !port) return interaction.reply({ content: '❌ Invalid address format! Use: name.aternos.me:12345', ephemeral: true })
 
       const userExisting = await BotModel.findOne({ userId })
       if (userExisting) {
@@ -377,8 +322,9 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'staffConfigureModal') {
       const targetId = interaction.fields.getTextInputValue('targetUserId')
       const name = interaction.fields.getTextInputValue('botName')
-      const ip = interaction.fields.getTextInputValue('botIp')
-      const port = parseInt(interaction.fields.getTextInputValue('botPort'))
+      const address = interaction.fields.getTextInputValue('botAddress')
+      const [ip, portStr] = address.split(':')
+      const port = parseInt(portStr)
       cleanupBot(targetId)
       bots[targetId] = { name, ip, port, bot: null }
       await BotModel.findOneAndUpdate({ userId: targetId }, { userId: targetId, name, ip, port }, { upsert: true })
