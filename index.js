@@ -174,7 +174,7 @@ client.on('messageCreate', async (message) => {
     await message.channel.send({ embeds: [embed], components: [row1, row2] })
   }
 
-  if (message.content === '!staffpanel' && message.channel.id === ADMIN_CHANNEL_ID) {
+  if (message.content === '!staffpanel' && message.channel.id === ADMIN_CHANNEL_ID && CORE_ID === 1) {
     const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('staff_configure').setLabel('🔧 Configure').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('staff_start').setLabel('▶️ Force Start').setStyle(ButtonStyle.Success),
